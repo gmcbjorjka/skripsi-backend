@@ -184,6 +184,29 @@ def update_name():
         return jsonify(success=False, message="User tidak ditemukan"), 400
 
 
+# --- User Management Routes ---
+@app.route('/user/all', methods=['GET'])
+@jwt_required()
+def get_all_users_route():
+    return UserController.get_all_users()
+
+@app.route('/user/<user_id>/role', methods=['POST'])
+@jwt_required()
+def change_role_route(user_id):
+    return UserController.change_role(user_id)
+
+@app.route('/user/<user_id>/toggle-status', methods=['POST'])
+@jwt_required()
+def toggle_user_status_route(user_id):
+    return UserController.toggle_user_status(user_id)
+
+@app.route('/user/<user_id>', methods=['DELETE'])
+@jwt_required()
+def delete_user_route(user_id):
+    return UserController.delete_user(user_id)
+
+
+
 # --- Cyrillic Character Routes ---
 @app.route('/cyrillic/analyze', methods=['POST'])
 def analyze_cyrillic_route():
@@ -232,6 +255,15 @@ def scan_url_route():
     return ReportController.scan_url()
 
 
+@app.route('/report/submit', methods=['POST'])
+def submit_report_route():
+    """
+    Kirim laporan phishing dari form user
+    POST /report/submit
+    """
+    return ReportController.submit_user_report()
+
+
 @app.route('/report/all', methods=['GET'])
 def get_all_reports_route():
     """
@@ -257,3 +289,53 @@ def get_statistics_route():
     GET /report/statistics
     """
     return ReportController.get_statistics()
+
+
+@app.route('/report/<report_id>', methods=['DELETE'])
+def delete_report_route(report_id):
+    """
+    Hapus report berdasarkan ID
+    DELETE /report/<report_id>
+    """
+    return ReportController.delete_report(report_id)
+
+
+@app.route('/report/<report_id>/validate', methods=['POST'])
+def validate_report_route(report_id):
+    """
+    Validasi report
+    POST /report/<report_id>/validate
+    """
+    return ReportController.validate_report(report_id)
+
+
+@app.route('/blacklist', methods=['POST'])
+def add_to_blacklist_route():
+    return ReportController.add_to_blacklist()
+
+
+@app.route('/blacklist', methods=['GET'])
+def get_blacklist_route():
+    return ReportController.get_blacklist()
+
+
+@app.route('/blacklist/<blacklist_id>', methods=['DELETE'])
+def remove_from_blacklist_route(blacklist_id):
+    return ReportController.remove_from_blacklist(blacklist_id)
+
+
+@app.route('/history', methods=['POST'])
+def add_to_history_route():
+    return ReportController.add_to_history()
+
+
+@app.route('/history', methods=['GET'])
+def get_history_route():
+    return ReportController.get_history()
+
+
+@app.route('/history', methods=['DELETE'])
+def clear_history_route():
+    return ReportController.clear_history()
+
+

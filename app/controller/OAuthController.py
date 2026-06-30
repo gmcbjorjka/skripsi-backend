@@ -11,8 +11,72 @@ import os
 def login_google():
     nonce = secrets.token_urlsafe(16)
     session['nonce'] = nonce
+    if request.args.get('source') == 'extension':
+        session['auth_source'] = 'extension'
     redirect_uri = url_for('auth_google', _external=True)
-    return oauth.google.authorize_redirect(redirect_uri, nonce=nonce)
+    
+    # Ambil redirect URL dari Authlib
+    resp = oauth.google.authorize_redirect(redirect_uri, nonce=nonce)
+    google_url = resp.headers.get('Location')
+    
+    # Kembalikan halaman HTML perantara agar browser menyimpan session cookie dengan benar
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <title>Redirecting to Google...</title>
+        <style>
+            body {{
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                background-color: #0f172a;
+                color: white;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                height: 100vh;
+                margin: 0;
+            }}
+            .card {{
+                background: #1e293b;
+                border: 1px solid #38bdf8;
+                padding: 30px;
+                border-radius: 12px;
+                text-align: center;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+                max-width: 400px;
+            }}
+            h1 {{ color: #38bdf8; margin-bottom: 10px; font-size: 20px; }}
+            p {{ color: #94a3b8; font-size: 14px; }}
+            .loader {{
+                border: 3px solid #1e293b;
+                border-top: 3px solid #38bdf8;
+                border-radius: 50%;
+                width: 24px;
+                height: 24px;
+                animation: spin 1s linear infinite;
+                margin: 15px auto 0 auto;
+            }}
+            @keyframes spin {{ 0% {{ transform: rotate(0deg); }} 100% {{ transform: rotate(360deg); }} }}
+        </style>
+        <script>
+            window.onload = function() {{
+                setTimeout(() => {{
+                    window.location.href = "{google_url}";
+                }}, 300);
+            }};
+        </script>
+    </head>
+    <body>
+        <div class="card">
+            <h1>Menghubungkan ke Google...</h1>
+            <p>Harap tunggu sebentar, Anda sedang dialihkan.</p>
+            <div class="loader"></div>
+        </div>
+    </body>
+    </html>
+    """
+    return html_content
 
 
 def auth_google():
@@ -44,6 +108,74 @@ def auth_google():
         "foto_profil": user_data['foto_profil'],
         "token": token
     }
+
+    # Cek jika berasal dari extension
+    auth_source = session.pop('auth_source', None)
+    if auth_source == 'extension':
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>Authentication Successful</title>
+            <style>
+                body {{
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                    background-color: #0f172a;
+                    color: white;
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    height: 100vh;
+                    margin: 0;
+                }}
+                .card {{
+                    background: #1e293b;
+                    border: 1px solid #38bdf8;
+                    padding: 30px;
+                    border-radius: 12px;
+                    text-align: center;
+                    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+                    max-width: 400px;
+                }}
+                h1 {{ color: #38bdf8; margin-bottom: 10px; font-size: 24px; }}
+                p {{ color: #94a3b8; font-size: 14px; margin-bottom: 20px; }}
+                .loader {{
+                    border: 4px solid #1e293b;
+                    border-top: 4px solid #38bdf8;
+                    border-radius: 50%;
+                    width: 30px;
+                    height: 30px;
+                    animation: spin 1s linear infinite;
+                    margin: 20px auto;
+                }}
+                @keyframes spin {{ 0% {{ transform: rotate(0deg); }} 100% {{ transform: rotate(360deg); }} }}
+            </style>
+        </head>
+        <body>
+            <div class="card">
+                <h1>✓ Login Berhasil</h1>
+                <p>Menghubungkan akun Anda dengan extension...</p>
+                <div class="loader"></div>
+                <!-- Data container for Content Script -->
+                <div id="auth-data" 
+                     data-token="{token}" 
+                     data-nama="{user_data['nama']}" 
+                     data-email="{user_data['email']}" 
+                     data-role="{user_data.get('role', 'user')}"
+                     style="display: none;">
+                </div>
+            </div>
+            <script>
+                // Auto close tab after a short delay
+                setTimeout(() => {{
+                    window.close();
+                }}, 1500);
+            </script>
+        </body>
+        </html>
+        """
+        return html_content
 
     return redirect('/')
 

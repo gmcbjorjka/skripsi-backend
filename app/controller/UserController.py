@@ -303,3 +303,127 @@ def change_password():
     except Exception as e:
         print(e)
         return response.error([], "Gagal mengubah kata sandi")
+
+
+@jwt_required()
+def get_all_users():
+    try:
+        users = list(mongo.db.user.find())
+        result = []
+        for u in users:
+            result.append({
+                "id": str(u.get("_id")),
+                "nama": u.get("nama", ""),
+                "email": u.get("email", ""),
+                "role": u.get("role", "3"),
+                "is_active": u.get("is_active", True),
+                "foto_profil": u.get("foto_profil", ""),
+                "created_at": u.get("created_at", datetime.utcnow()).isoformat() if isinstance(u.get("created_at"), datetime) else str(u.get("created_at", ""))
+            })
+        return response.success(result, "Daftar user ditemukan")
+    except Exception as e:
+        print(e)
+        return response.error([], f"Gagal mengambil daftar user: {str(e)}")
+
+
+def check_hierarchy(caller_id, target_id):
+    caller = mongo.db.user.find_one({"_id": ObjectId(caller_id)})
+    if not caller:
+        return False, response.unauthorized([], "Sesi telah berakhir")
+    
+    try:
+        caller_role = int(caller.get('role', 3))
+    except ValueError:
+        caller_role = 3
+
+    if caller_role >= 3:
+        return False, response.forbidden([], "Akses ditolak. Hanya Administrator yang diizinkan.")
+
+    # Jika caller ingin mengubah dirinya sendiri, kembalikan error
+    if str(caller_id) == str(target_id):
+        return False, response.forbidden([], "Akses ditolak. Anda tidak bisa memodifikasi atau menghapus akun Anda sendiri.")
+
+    target = mongo.db.user.find_one({"_id": ObjectId(target_id)})
+    if not target:
+        return False, response.notFound([], "User tidak ditemukan")
+
+    try:
+        target_role = int(target.get('role', 3))
+    except ValueError:
+        target_role = 3
+
+    if caller_role >= target_role:
+        return False, response.forbidden([], "Akses ditolak. Anda tidak bisa mengubah peran/status atau menghapus pengguna dengan tingkat peran setara atau lebih tinggi.")
+        
+    return True, target
+
+
+@jwt_required()
+def change_role(user_id):
+    try:
+        caller_id = get_jwt_identity()
+        authorized, result = check_hierarchy(caller_id, user_id)
+        if not authorized:
+            return result
+
+        data = request.get_json()
+        new_role = data.get("role")
+        if not new_role:
+            return response.badRequest([], "Role tidak boleh kosong")
+        
+        caller = mongo.db.user.find_one({"_id": ObjectId(caller_id)})
+        try:
+            caller_role = int(caller.get('role', 3))
+            new_role_int = int(new_role)
+        except:
+            caller_role = 3
+            new_role_int = 3
+
+        if caller_role >= new_role_int:
+            return response.forbidden([], "Akses ditolak. Anda tidak bisa menaikkan peran pengguna menjadi setara atau lebih tinggi dari Anda.")
+
+        mongo.db.user.update_one(
+            {"_id": ObjectId(user_id)},
+            {"$set": {"role": str(new_role), "updated_at": datetime.utcnow()}}
+        )
+        return response.success({}, "Role berhasil diubah")
+    except Exception as e:
+        print(e)
+        return response.error([], f"Gagal mengubah role: {str(e)}")
+
+
+@jwt_required()
+def toggle_user_status(user_id):
+    try:
+        caller_id = get_jwt_identity()
+        authorized, result = check_hierarchy(caller_id, user_id)
+        if not authorized:
+            return result
+
+        target_user = result
+        current_status = target_user.get("is_active", True)
+        new_status = not current_status
+        
+        mongo.db.user.update_one(
+            {"_id": ObjectId(user_id)},
+            {"$set": {"is_active": new_status, "updated_at": datetime.utcnow()}}
+        )
+        return response.success({"is_active": new_status}, f"Status user berhasil diubah menjadi {'Aktif' if new_status else 'Nonaktif'}")
+    except Exception as e:
+        print(e)
+        return response.error([], f"Gagal mengubah status: {str(e)}")
+
+
+@jwt_required()
+def delete_user(user_id):
+    try:
+        caller_id = get_jwt_identity()
+        authorized, result = check_hierarchy(caller_id, user_id)
+        if not authorized:
+            return result
+
+        mongo.db.user.delete_one({"_id": ObjectId(user_id)})
+        return response.success({}, "User berhasil dihapus")
+    except Exception as e:
+        print(e)
+        return response.error([], f"Gagal menghapus user: {str(e)}")

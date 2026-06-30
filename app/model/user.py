@@ -12,6 +12,7 @@ class User:
         self.api_key = secrets.token_hex(32)
         self.verification_token = secrets.token_urlsafe(32)
         self.is_verified = False
+        self.is_active = True
         self.created_at = datetime.utcnow()
         self.updated_at = datetime.utcnow()
 
@@ -25,6 +26,7 @@ class User:
             "api_key": self.api_key,
             "verification_token": self.verification_token,
             "is_verified": self.is_verified,
+            "is_active": self.is_active,
             "created_at": self.created_at,
             "updated_at": self.updated_at
         }
