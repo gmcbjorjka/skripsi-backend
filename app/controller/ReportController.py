@@ -17,10 +17,20 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 MODEL_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'model_ekstensi', 'hybrid_xgboost_phishing.joblib')
 try:
     phishing_model = joblib.load(MODEL_PATH)
-    print("✅ Hybrid ML Pipeline loaded successfully")
+    print("[ReportController] Hybrid ML Pipeline loaded successfully")
 except Exception as e:
-    print(f"❌ Failed to load Hybrid ML Pipeline: {e}")
+    print(f"[ReportController] Failed to load Hybrid ML Pipeline: {e}")
     phishing_model = None
+
+def reload_model():
+    global phishing_model
+    try:
+        phishing_model = joblib.load(MODEL_PATH)
+        print("[ReportController] Hybrid ML Pipeline reloaded successfully")
+        return True
+    except Exception as e:
+        print(f"[ReportController] Failed to reload Hybrid ML Pipeline: {e}")
+        return False
 
 def extract_features(url):
     features = []
@@ -234,8 +244,12 @@ def get_all_reports():
     GET /report/all
     """
     try:
-        skip = request.args.get('skip', 0, type=int)
-        limit = request.args.get('limit', 50, type=int)
+        page = request.args.get('page', 1, type=int)
+        limit = request.args.get('limit', 10, type=int)
+        search = request.args.get('search', '').strip()
+        status_filter = request.args.get('filter', 'all').strip()
+        
+        skip = (page - 1) * limit
         
         # Ensure database indexes exist for fast sorting and searching
         try:
@@ -244,8 +258,14 @@ def get_all_reports():
         except Exception as idx_err:
             print(f"Index creation warning: {idx_err}")
 
-        reports = list(mongo.db.reports.find({"is_user_report": True}).sort('date', -1).skip(skip).limit(limit))
-        total = mongo.db.reports.count_documents({"is_user_report": True})
+        query = {"is_user_report": True}
+        if search:
+            query["url"] = {"$regex": search, "$options": "i"}
+        if status_filter != "all":
+            query["status"] = status_filter
+
+        reports = list(mongo.db.reports.find(query).sort('date', -1).skip(skip).limit(limit))
+        total = mongo.db.reports.count_documents(query)
         
         # OPTIMIZATION: Bulk fetch blacklist status in a single query
         urls_in_reports = [r.get('url', '') for r in reports if r.get('url')]
@@ -270,8 +290,9 @@ def get_all_reports():
         return response.success({
             'reports': result,
             'total': total,
-            'page': skip // limit + 1,
-            'limit': limit
+            'page': page,
+            'limit': limit,
+            'pages': (total + limit - 1) // limit if total > 0 else 0
         }, "Report berhasil diambil")
     
     except Exception as e:
@@ -405,6 +426,22 @@ def add_to_blacklist():
             {"url": url},
             {"$set": {"result": "Phishing", "status": "Validated", "confidence": 1.0}}
         )
+
+        # Tambahkan juga ke koleksi dataset_links agar masuk saat retraining model berikutnya
+        try:
+            mongo.db.dataset_links.update_one(
+                {"url": url},
+                {"$set": {
+                    "url": url,
+                    "label": 1, # Phishing
+                    "source": "admin_blacklist",
+                    "date_added": datetime.utcnow()
+                }},
+                upsert=True
+            )
+            print(f"[ReportController] Blacklisted URL synchronized to dataset_links: {url}")
+        except Exception as e_ds:
+            print(f"[ReportController] Warning: Gagal sinkronisasi blacklist ke dataset_links: {e_ds}")
         
         return response.success({"id": str(inserted.inserted_id)}, "URL berhasil ditambahkan ke daftar hitam")
     except Exception as e:
@@ -418,7 +455,19 @@ def get_blacklist():
     GET /blacklist
     """
     try:
-        blacklist = list(mongo.db.blacklist.find().sort('date_added', -1))
+        page = request.args.get('page', 1, type=int)
+        limit = request.args.get('limit', 10, type=int)
+        search = request.args.get('search', '').strip()
+        
+        skip = (page - 1) * limit
+        
+        query = {}
+        if search:
+            query["url"] = {"$regex": search, "$options": "i"}
+
+        blacklist = list(mongo.db.blacklist.find(query).sort('date_added', -1).skip(skip).limit(limit))
+        total = mongo.db.blacklist.count_documents(query)
+        
         result = []
         for b in blacklist:
             result.append({
@@ -426,7 +475,13 @@ def get_blacklist():
                 "url": b.get("url", ""),
                 "date_added": b.get("date_added", datetime.utcnow()).isoformat()
             })
-        return response.success(result, "Blacklist berhasil diambil")
+        return response.success({
+            'blacklist': result,
+            'total': total,
+            'page': page,
+            'limit': limit,
+            'pages': (total + limit - 1) // limit if total > 0 else 0
+        }, "Blacklist berhasil diambil")
     except Exception as e:
         print(f"Error getting blacklist: {str(e)}")
         return response.error([], f"Gagal mengambil blacklist: {str(e)}")

@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  backend:
+    build: .
+    container_name: skripsi-backend
+    restart: always
+    ports:
+      - "5000:5000"
+    environment:
+      - PORT=5000
+    env_file:
+      - .env
+    volumes:
+      # Map folder upload agar foto profil dan logo kustom tidak hilang saat container di-rebuild
+      - ./upload:/app/upload
+      # Map folder model agar versi model yang dilatih/diaktifkan tersimpan permanen di VPS
+      - ./model_ekstensi:/app/model_ekstensi

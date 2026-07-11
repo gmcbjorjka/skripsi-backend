@@ -308,7 +308,22 @@ def change_password():
 @jwt_required()
 def get_all_users():
     try:
-        users = list(mongo.db.user.find())
+        page = request.args.get('page', 1, type=int)
+        limit = request.args.get('limit', 10, type=int)
+        search = request.args.get('search', '').strip()
+        
+        skip = (page - 1) * limit
+        
+        query = {}
+        if search:
+            query["$or"] = [
+                {"nama": {"$regex": search, "$options": "i"}},
+                {"email": {"$regex": search, "$options": "i"}}
+            ]
+
+        users = list(mongo.db.user.find(query).sort('created_at', -1).skip(skip).limit(limit))
+        total = mongo.db.user.count_documents(query)
+        
         result = []
         for u in users:
             result.append({
@@ -320,7 +335,13 @@ def get_all_users():
                 "foto_profil": u.get("foto_profil", ""),
                 "created_at": u.get("created_at", datetime.utcnow()).isoformat() if isinstance(u.get("created_at"), datetime) else str(u.get("created_at", ""))
             })
-        return response.success(result, "Daftar user ditemukan")
+        return response.success({
+            'users': result,
+            'total': total,
+            'page': page,
+            'limit': limit,
+            'pages': (total + limit - 1) // limit if total > 0 else 0
+        }, "Daftar user ditemukan")
     except Exception as e:
         print(e)
         return response.error([], f"Gagal mengambil daftar user: {str(e)}")

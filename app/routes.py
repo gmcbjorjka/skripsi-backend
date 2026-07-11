@@ -339,3 +339,68 @@ def clear_history_route():
     return ReportController.clear_history()
 
 
+# --- ML Model Management Routes ---
+@app.route('/model/status', methods=['GET'])
+def get_model_status_route():
+    from app.controller.ModelController import ModelController
+    return ModelController.get_status()
+
+@app.route('/model/import-dataset', methods=['POST'])
+def import_dataset_route():
+    from app.controller.ModelController import ModelController
+    return ModelController.import_dataset()
+
+@app.route('/model/retrain', methods=['POST'])
+@jwt_required()
+def retrain_model_route():
+    from app.controller.ModelController import ModelController
+    return ModelController.retrain()
+
+@app.route('/model/apply', methods=['POST'])
+@jwt_required()
+def apply_model_route():
+    from app.controller.ModelController import ModelController
+    return ModelController.apply_model()
+
+@app.route('/model/discard', methods=['POST'])
+@jwt_required()
+def discard_model_route():
+    from app.controller.ModelController import ModelController
+    return ModelController.discard_model()
+
+@app.route('/model/dataset', methods=['GET'])
+def get_dataset_route():
+    from app.controller.ModelController import ModelController
+    return ModelController.get_dataset()
+
+@app.route('/model/activate', methods=['POST'])
+@jwt_required()
+def activate_model_route():
+    from app.controller.ModelController import ModelController
+    return ModelController.activate_model()
+
+@app.route('/extension/config', methods=['GET'])
+def get_extension_config_route():
+    from app.controller.ModelController import ModelController
+    return ModelController.get_extension_config()
+
+@app.route('/admin/extension/config', methods=['GET'])
+@jwt_required()
+def get_admin_extension_config_route():
+    from app.controller.ModelController import ModelController
+    return ModelController.get_extension_config()
+
+@app.route('/admin/extension/config', methods=['POST'])
+@jwt_required()
+def update_extension_config_route():
+    from app.controller.ModelController import ModelController
+    return ModelController.update_extension_config()
+
+@app.route('/admin/extension/upload-logo', methods=['POST'])
+@jwt_required()
+def upload_extension_logo_route():
+    from app.controller.ModelController import ModelController
+    return ModelController.upload_extension_logo()
+
+
+
