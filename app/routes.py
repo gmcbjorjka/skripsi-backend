@@ -36,6 +36,10 @@ def register_user():
 def login_user():
     return UserController.login()
 
+@app.route('/user/chrome-auth', methods=['POST'])
+def chrome_auth_user():
+    return UserController.chrome_auth()
+
 @app.route('/uploads/<filename>')
 def uploaded_file(filename):
     full_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)

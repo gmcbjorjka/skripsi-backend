@@ -447,4 +447,55 @@ def delete_user(user_id):
         return response.success({}, "User berhasil dihapus")
     except Exception as e:
         print(e)
-        return response.error([], f"Gagal menghapus user: {str(e)}")
+        return response.error([], f"Gagal menghapus user: {str(e)}")
+
+
+def chrome_auth():
+    try:
+        data = request.get_json()
+        if not data:
+            return response.error([], "Request body harus berupa JSON")
+            
+        email = data.get('email')
+        nama = data.get('nama')
+        
+        if not email:
+            return response.error([], "Email wajib diisi")
+            
+        user = mongo.db.user.find_one({"email": email})
+        
+        if not user:
+            # Create user dynamically
+            import secrets
+            hashed_pw = generate_password_hash(secrets.token_hex(16))
+            role = '3'  # default user role
+            foto_profil = ""
+            
+            # If name is not provided, split email
+            if not nama:
+                nama = email.split('@')[0]
+                
+            user_obj = User(nama, email, hashed_pw, role, foto_profil)
+            # Mark auto-verified since they are logged into Chrome
+            user_obj.is_verified = True
+            
+            inserted = mongo.db.user.insert_one(user_obj.to_dict())
+            user_id = str(inserted.inserted_id)
+            user_data = user_obj.to_dict()
+        else:
+            user_id = str(user['_id'])
+            nama = user.get('nama', nama or email.split('@')[0])
+            user_data = user
+            
+        access_token = create_access_token(identity=user_id)
+        
+        return response.success({
+            "token": access_token,
+            "nama": nama,
+            "email": email,
+            "role": user_data.get('role', '3')
+        }, "Autentikasi Chrome berhasil")
+        
+    except Exception as e:
+        print(f"Error in chrome_auth: {str(e)}")
+        return response.error([], f"Gagal autentikasi Chrome: {str(e)}")
