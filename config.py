@@ -13,7 +13,7 @@ class Config(object):
     API_KEY = os.environ.get("API_KEY")
     # Upload config
     UPLOAD_FOLDER = os.path.join(basedir, os.environ.get("UPLOAD_FOLDER", "upload"))
-    MAX_CONTENT_LENGTH = 5 * 1024 * 1024  # 5 MB
+    MAX_CONTENT_LENGTH = 50 * 1024 * 1024  # 50 MB
     GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID_WEB")  # <- Pastikan ini ditambahkan
     GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET")  # <- Ini juga
 

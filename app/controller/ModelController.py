@@ -715,8 +715,15 @@ class ModelController:
             file.save(save_path)
             print(f"[ModelController] Extension logo saved at: {save_path}")
             
+            # Base URL for download link
+            base_url = request.host_url
+            if "localhost" not in request.host_url and "127.0.0.1" not in request.host_url:
+                base_url = base_url.replace("http://", "https://")
+            if "api.atlass.my.id" in request.host_url:
+                base_url = "https://api.atlass.my.id/"
+                
             # Buat URL lengkap dengan cache-buster
-            logo_url = f"http://127.0.0.1:5000/uploads/{new_filename}?t={int(time.time())}"
+            logo_url = f"{base_url}uploads/{new_filename}?t={int(time.time())}"
             
             # Update database
             mongo.db.extension_config.update_many({}, {"$set": {"app_logo_url": logo_url}})
@@ -733,6 +740,155 @@ class ModelController:
         except Exception as e:
             print(f"[ModelController] Error uploading extension logo: {e}")
             return response.error([], f"Gagal mengunggah logo: {str(e)}")
+
+    @staticmethod
+    def get_active_version():
+        try:
+            active = mongo.db.extension_versions.find_one({"is_active": True})
+            if not active:
+                # Fallback to static if no version is active
+                return response.success({
+                    "version": "1.0",
+                    "url": "https://api.atlass.my.id/uploads/smartxgboost.zip",
+                    "filename": "smartxgboost.zip",
+                    "is_active": True
+                }, "Active version found (default fallback).")
+            
+            active["_id"] = str(active["_id"])
+            if "uploaded_at" in active:
+                active["uploaded_at"] = active["uploaded_at"].isoformat()
+            return response.success(active, "Active version retrieved successfully.")
+        except Exception as e:
+            return response.error([], f"Gagal mengambil versi aktif: {str(e)}")
+
+    @staticmethod
+    def get_all_versions():
+        try:
+            versions = list(mongo.db.extension_versions.find().sort("uploaded_at", -1))
+            for v in versions:
+                v["_id"] = str(v["_id"])
+                if "uploaded_at" in v:
+                    v["uploaded_at"] = v["uploaded_at"].isoformat()
+            return response.success(versions, "Semua versi berhasil diambil.")
+        except Exception as e:
+            return response.error([], f"Gagal mengambil daftar versi: {str(e)}")
+
+    @staticmethod
+    def upload_version():
+        try:
+            from werkzeug.utils import secure_filename
+            from flask import current_app
+            
+            version_num = request.form.get("version", "").strip()
+            description = request.form.get("description", "").strip()
+            
+            if not version_num:
+                return response.badRequest([], "Nomor versi wajib diisi.")
+                
+            file = request.files.get("file")
+            if not file or file.filename == "":
+                return response.badRequest([], "Berkas zip wajib diunggah.")
+                
+            filename = secure_filename(file.filename)
+            ext = os.path.splitext(filename)[1].lower()
+            if ext != ".zip":
+                return response.badRequest([], "Format file tidak didukung. Harap unggah berkas .zip.")
+                
+            # Create a unique filename for the zip to avoid overwrite
+            new_filename = f"phishing_guard_v{version_num}_{int(datetime.utcnow().timestamp())}.zip"
+            upload_path = current_app.config['UPLOAD_FOLDER']
+            os.makedirs(upload_path, exist_ok=True)
+            save_path = os.path.join(upload_path, new_filename)
+            
+            file.save(save_path)
+            
+            # Base URL for download link
+            base_url = request.host_url
+            if "localhost" not in request.host_url and "127.0.0.1" not in request.host_url:
+                base_url = base_url.replace("http://", "https://")
+            if "api.atlass.my.id" in request.host_url:
+                base_url = "https://api.atlass.my.id/"
+            
+            url = f"{base_url}uploads/{new_filename}"
+            
+            # Insert into database
+            version_doc = {
+                "version": version_num,
+                "description": description,
+                "filename": new_filename,
+                "url": url,
+                "uploaded_at": datetime.utcnow(),
+                "is_active": False
+            }
+            
+            # If there are no other versions, make this one active by default
+            existing_count = mongo.db.extension_versions.count_documents({})
+            if existing_count == 0:
+                version_doc["is_active"] = True
+                
+            mongo.db.extension_versions.insert_one(version_doc)
+            
+            return response.success(None, "Versi baru berhasil diunggah.")
+        except Exception as e:
+            return response.error([], f"Gagal mengunggah versi: {str(e)}")
+
+    @staticmethod
+    def activate_version():
+        try:
+            data = request.get_json()
+            version_id = data.get("version_id")
+            if not version_id:
+                return response.badRequest([], "ID versi wajib disertakan.")
+                
+            # Set all to inactive
+            mongo.db.extension_versions.update_many({}, {"$set": {"is_active": False}})
+            
+            # Set target to active
+            res = mongo.db.extension_versions.update_one(
+                {"_id": ObjectId(version_id)},
+                {"$set": {"is_active": True}}
+            )
+            
+            if res.matched_count == 0:
+                return response.badRequest([], "Versi tidak ditemukan.")
+                
+            return response.success(None, "Versi berhasil diaktifkan.")
+        except Exception as e:
+            return response.error([], f"Gagal mengaktifkan versi: {str(e)}")
+
+    @staticmethod
+    def delete_version(version_id):
+        try:
+            version = mongo.db.extension_versions.find_one({"_id": ObjectId(version_id)})
+            if not version:
+                return response.badRequest([], "Versi tidak ditemukan.")
+                
+            # Delete physical file
+            filename = version.get("filename")
+            if filename:
+                from flask import current_app
+                file_path = os.path.join(current_app.config['UPLOAD_FOLDER'], filename)
+                if os.path.exists(file_path):
+                    try:
+                        os.remove(file_path)
+                    except Exception as e:
+                        print(f"Error removing file {file_path}: {e}")
+                        
+            # Delete from DB
+            mongo.db.extension_versions.delete_one({"_id": ObjectId(version_id)})
+            
+            # If the deleted version was active, make the latest remaining one active
+            if version.get("is_active"):
+                latest = mongo.db.extension_versions.find_one(sort=[("uploaded_at", -1)])
+                if latest:
+                    mongo.db.extension_versions.update_one(
+                        {"_id": latest["_id"]},
+                        {"$set": {"is_active": True}}
+                    )
+                    
+            return response.success(None, "Versi berhasil dihapus.")
+        except Exception as e:
+            return response.error([], f"Gagal menghapus versi: {str(e)}")
 
     @staticmethod
     def send_model_update_email(version, metrics, user_name, user_email):

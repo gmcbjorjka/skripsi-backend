@@ -406,5 +406,34 @@ def upload_extension_logo_route():
     from app.controller.ModelController import ModelController
     return ModelController.upload_extension_logo()
 
+@app.route('/extension/active-version', methods=['GET'])
+def get_active_version_route():
+    from app.controller.ModelController import ModelController
+    return ModelController.get_active_version()
+
+@app.route('/admin/extension/versions', methods=['GET'])
+@jwt_required()
+def get_all_versions_route():
+    from app.controller.ModelController import ModelController
+    return ModelController.get_all_versions()
+
+@app.route('/admin/extension/upload-version', methods=['POST'])
+@jwt_required()
+def upload_version_route():
+    from app.controller.ModelController import ModelController
+    return ModelController.upload_version()
+
+@app.route('/admin/extension/activate-version', methods=['POST'])
+@jwt_required()
+def activate_version_route():
+    from app.controller.ModelController import ModelController
+    return ModelController.activate_version()
+
+@app.route('/admin/extension/delete-version/<version_id>', methods=['DELETE'])
+@jwt_required()
+def delete_version_route(version_id):
+    from app.controller.ModelController import ModelController
+    return ModelController.delete_version(version_id)
+
 
 
