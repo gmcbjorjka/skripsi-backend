@@ -45,3 +45,4 @@ tldextract
 joblib
 gunicorn
 Flask-Cors
+pandas
